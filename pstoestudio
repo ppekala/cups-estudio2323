@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+#
+# Toshiba e-STUDIO2323 cups filter
+# converts CUPS PostScript output to PJL/JBIG bitmap
+#
+# Original name: pstoricohddst-gdi (Ricoh SP-100 driver)
+# Author: Serge V Shistarev
+# https://github.com/madlynx (repo no longer available)
+#
+# Required programs:
+#  - convert from imagemagick package
+#  - gs from ghostscript package
+#  - inotifywait from inotify-tools package
+#  - pbmtojbg from jbigkit-bin package
+#  - pkill from procps
+#
+# Execution from PPD file with line:
+#  *cupsFilter: "application/vnd.cups-postscript 100 pstoestudio"
+#
+
+function trapINT() {
+	[ "x$trp" = "x" ] &&  trp="yes" || return
+	sleep 3
+	rm -rf $tmpdir
+	exit
+}
+
+function stop() {
+	echo "stop" > $tmpdir/999999999-page.pbm
+}
+
+trap "stop; trapINT" SIGINT SIGTERM SIGQUIT
+
+# Printing date
+ddate="`LC_ALL=en_US.UTF-8 date '+%Y/%m/%d %H:%M:%S'`"
+
+# Temporary directory
+tmpdir="/tmp/pstoestudio-`uuidgen`"
+mkdir -p $tmpdir
+echo $* > $tmpdir/cmdline
+
+# Printing defaults
+copies=$4
+paper="A4"
+
+# Parse CUPS options
+for opt in $5; do
+	case $opt in
+		PageSize=*)
+			paper=${opt##*=} ;;
+	esac
+done
+
+# size [inches] * 600 [dpi] = pixels
+case $paper in
+	"A3")
+		paperwidth=7016
+		paperlength=9921 ;;
+	"A4")
+		paperwidth=4961
+		paperlength=7016 ;;
+esac
+
+(
+	stage="empty"
+	inotifywait -q -m -r -e close_write --format '%f' $tmpdir |
+		grep --line-buffered 'page.pbm$' | while read page; do
+
+	# page submitted
+	[ "$stage" = "empty" ] && {
+		# Flushing PJL header
+		printf '\033%%-12345X@PJL\r\n'
+		printf '@PJL SET TIMESTAMP=%s\r\n' $ddate
+		printf '@PJL SET COMPRESS=JBIG\r\n'
+		printf '@PJL SET USERNAME=default\r\n'
+		printf '@PJL SET COVER=OFF\r\n'
+		printf '@PJL SET HOLD=OFF\r\n'
+		printf '@PJL SET ROTATESORT=OFF\r\n'
+		printf '@PJL SET SMOOTHING=OFF\r\n'
+		printf '@PJL SET TONERSAVE=OFF\r\n'
+		printf '@PJL SET DEPTCODENUM=""\r\n'
+		printf '@PJL SET MEDIASOURCE=AUTO\r\n'
+		printf '@PJL SET MEDIATYPE=PAPER\r\n'
+
+		stage="printing"
+	}
+	[ "$page" = "999999999-page.pbm" ] && {
+		# Flushing PJL footer
+		printf '@PJL EOJ\r\n'
+		printf '\033%%-12345\r\n'
+
+		# Kill inotifywait
+		pkill -f $tmpdir
+		break
+	}
+	[ "$stage" = "printing" ] && {
+		# Converting page to JBIG format (parameters are very special for this printer!)
+		pbmtojbg -p 72 -o 3 -m 0 -q < $tmpdir/$page > $tmpdir/raster.jbig
+
+		# Taking image size
+		jsize=`wc -c < $tmpdir/raster.jbig`
+
+		# Flushing page header
+		printf '@PJL SET PAGESTATUS=START\r\n'
+		printf '@PJL SET COPIES=%d\r\n' $copies
+		printf '@PJL SET DUPLEX=OFF\r\n'
+		printf '@PJL SET PAPER=%s\r\n' $paper
+		printf '@PJL SET PAPERWIDTH=%d\r\n' $paperwidth
+		printf '@PJL SET PAPERLENGTH=%d\r\n' $paperlength
+		printf '@PJL SET RESOLUTION=600\r\n'
+		# CUPS does portrait/landscape conversion before sending output to filter
+		printf '@PJL SET ORIENTATION=PORTRAIT\r\n'
+		printf '@PJL SET IMAGELEN=%d\r\n' $jsize
+
+		# Flushing image
+		cat $tmpdir/raster.jbig
+
+		# Flushing page footer
+		dotcount=$(convert $tmpdir/raster.jbig \
+			-define histogram:unique-colors=true -format %c histogram:info:- |
+			awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
+
+		printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
+		printf '@PJL SET PAGESTATUS=END\r\n'
+	}
+	done
+) &
+
+# Converting from PostScript to PBM image format (per page)
+gs -sDEVICE=pbmraw -sOutputFile=${tmpdir}/%d-page.pbm -r600 \
+	-g${paperwidth}x${paperlength} -dFIXEDMEDIA -dQUIET -dBATCH -dNOPAUSE -
+
+stop
+wait
+
+trapINT
