@@ -14,3 +14,6 @@ uninstall:
 	rm $(FILTERDIR)/pstoestudio
 	rm $(PPDDIR)/Toshiba_e-STUDIO2323.ppd
 
+update:
+	@install -Cv -o root -g root -m 755 pstoestudio $(FILTERDIR)
+	@install -Cv -o root -g root -m 644 Toshiba_e-STUDIO2323.ppd $(PPDDIR)
