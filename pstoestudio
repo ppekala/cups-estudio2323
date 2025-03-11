@@ -64,65 +64,65 @@ esac
 (
 	stage="empty"
 	inotifywait -q -m -r -e close_write --format '%f' $tmpdir |
-		grep --line-buffered 'page.pbm$' | while read page; do
+		grep --line-buffered 'page.pbm$' | while read page;
+	do
+		# page submitted
+		[ "$stage" = "empty" ] && {
+			# Flushing PJL header
+			printf '\033%%-12345X@PJL\r\n'
+			printf '@PJL SET TIMESTAMP=%s\r\n' $ddate
+			printf '@PJL SET COMPRESS=JBIG\r\n'
+			printf '@PJL SET USERNAME=default\r\n'
+			printf '@PJL SET COVER=OFF\r\n'
+			printf '@PJL SET HOLD=OFF\r\n'
+			printf '@PJL SET ROTATESORT=OFF\r\n'
+			printf '@PJL SET SMOOTHING=OFF\r\n'
+			printf '@PJL SET TONERSAVE=OFF\r\n'
+			printf '@PJL SET DEPTCODENUM=""\r\n'
+			printf '@PJL SET MEDIASOURCE=AUTO\r\n'
+			printf '@PJL SET MEDIATYPE=PAPER\r\n'
 
-	# page submitted
-	[ "$stage" = "empty" ] && {
-		# Flushing PJL header
-		printf '\033%%-12345X@PJL\r\n'
-		printf '@PJL SET TIMESTAMP=%s\r\n' $ddate
-		printf '@PJL SET COMPRESS=JBIG\r\n'
-		printf '@PJL SET USERNAME=default\r\n'
-		printf '@PJL SET COVER=OFF\r\n'
-		printf '@PJL SET HOLD=OFF\r\n'
-		printf '@PJL SET ROTATESORT=OFF\r\n'
-		printf '@PJL SET SMOOTHING=OFF\r\n'
-		printf '@PJL SET TONERSAVE=OFF\r\n'
-		printf '@PJL SET DEPTCODENUM=""\r\n'
-		printf '@PJL SET MEDIASOURCE=AUTO\r\n'
-		printf '@PJL SET MEDIATYPE=PAPER\r\n'
+			stage="printing"
+		}
+		[ "$page" = "999999999-page.pbm" ] && {
+			# Flushing PJL footer
+			printf '@PJL EOJ\r\n'
+			printf '\033%%-12345\r\n'
 
-		stage="printing"
-	}
-	[ "$page" = "999999999-page.pbm" ] && {
-		# Flushing PJL footer
-		printf '@PJL EOJ\r\n'
-		printf '\033%%-12345\r\n'
+			# Kill inotifywait
+			pkill -f $tmpdir
+			break
+		}
+		[ "$stage" = "printing" ] && {
+			# Converting page to JBIG format (parameters are very special for this printer!)
+			pbmtojbg -p 72 -o 3 -m 0 -q < $tmpdir/$page > $tmpdir/raster.jbig
 
-		# Kill inotifywait
-		pkill -f $tmpdir
-		break
-	}
-	[ "$stage" = "printing" ] && {
-		# Converting page to JBIG format (parameters are very special for this printer!)
-		pbmtojbg -p 72 -o 3 -m 0 -q < $tmpdir/$page > $tmpdir/raster.jbig
+			# Taking image size
+			jsize=`wc -c < $tmpdir/raster.jbig`
 
-		# Taking image size
-		jsize=`wc -c < $tmpdir/raster.jbig`
+			# Flushing page header
+			printf '@PJL SET PAGESTATUS=START\r\n'
+			printf '@PJL SET COPIES=%d\r\n' $copies
+			printf '@PJL SET DUPLEX=OFF\r\n'
+			printf '@PJL SET PAPER=%s\r\n' $paper
+			printf '@PJL SET PAPERWIDTH=%d\r\n' $paperwidth
+			printf '@PJL SET PAPERLENGTH=%d\r\n' $paperlength
+			printf '@PJL SET RESOLUTION=600\r\n'
+			# CUPS does portrait/landscape conversion before sending output to filter
+			printf '@PJL SET ORIENTATION=PORTRAIT\r\n'
+			printf '@PJL SET IMAGELEN=%d\r\n' $jsize
 
-		# Flushing page header
-		printf '@PJL SET PAGESTATUS=START\r\n'
-		printf '@PJL SET COPIES=%d\r\n' $copies
-		printf '@PJL SET DUPLEX=OFF\r\n'
-		printf '@PJL SET PAPER=%s\r\n' $paper
-		printf '@PJL SET PAPERWIDTH=%d\r\n' $paperwidth
-		printf '@PJL SET PAPERLENGTH=%d\r\n' $paperlength
-		printf '@PJL SET RESOLUTION=600\r\n'
-		# CUPS does portrait/landscape conversion before sending output to filter
-		printf '@PJL SET ORIENTATION=PORTRAIT\r\n'
-		printf '@PJL SET IMAGELEN=%d\r\n' $jsize
+			# Flushing image
+			cat $tmpdir/raster.jbig
 
-		# Flushing image
-		cat $tmpdir/raster.jbig
+			# Flushing page footer
+			dotcount=$(convert $tmpdir/raster.jbig \
+				-define histogram:unique-colors=true -format %c histogram:info:- |
+				awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
 
-		# Flushing page footer
-		dotcount=$(convert $tmpdir/raster.jbig \
-			-define histogram:unique-colors=true -format %c histogram:info:- |
-			awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
-
-		printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
-		printf '@PJL SET PAGESTATUS=END\r\n'
-	}
+			printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
+			printf '@PJL SET PAGESTATUS=END\r\n'
+		}
 	done
 ) &
 
