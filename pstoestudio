@@ -40,7 +40,6 @@ mkdir -p $tmpdir
 echo $* > $tmpdir/cmdline
 
 # Printing defaults
-copies=$4
 paper="A4"
 
 # Parse CUPS options
@@ -102,7 +101,7 @@ esac
 
 			# Flushing page header
 			printf '@PJL SET PAGESTATUS=START\r\n'
-			printf '@PJL SET COPIES=%d\r\n' $copies
+			printf '@PJL SET COPIES=1\r\n'
 			printf '@PJL SET DUPLEX=OFF\r\n'
 			printf '@PJL SET PAPER=%s\r\n' $paper
 			printf '@PJL SET PAPERWIDTH=%d\r\n' $paperwidth
