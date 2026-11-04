@@ -7,5 +7,6 @@ elif [ "$(uname -s)" = "FreeBSD" ]; then
 	pkg install bash ghostscript10 ImageMagick7 inotify-tools jbigkit
 else
 	echo "Your distribution is not supported, run dependencies not installed."
+	exit 1
 fi
 
