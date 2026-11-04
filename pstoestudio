@@ -118,7 +118,7 @@ esac
 			# Flushing image
 			cat $tmpdir/raster.jbig
 
-			if [ $DISABLE_DOTCOUNT -ne 0 ]; then
+			if [ $DISABLE_DOTCOUNT -eq 0 ]; then
 				dotcount=$(convert $tmpdir/raster.jbig \
 					-define histogram:unique-colors=true -format %c histogram:info:- |
 					awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
