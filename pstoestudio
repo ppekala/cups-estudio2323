@@ -35,8 +35,7 @@ trap "stop; trapINT" SIGINT SIGTERM SIGQUIT
 ddate="`LC_ALL=en_US.UTF-8 date '+%Y/%m/%d %H:%M:%S'`"
 
 # Temporary directory
-tmpdir="/tmp/pstoestudio-`uuidgen`"
-mkdir -p $tmpdir
+tmpdir=`mktemp --directory -t pstoestudio-XXXXXX` || exit 1
 echo $* > $tmpdir/cmdline
 
 # Printing defaults
@@ -62,7 +61,7 @@ esac
 
 (
 	stage="empty"
-	inotifywait -q -m -r -e close_write --format '%f' $tmpdir |
+	inotifywait --quiet --monitor --recursive --event close_write --format '%f' $tmpdir |
 		grep --line-buffered 'page.pbm$' | while read page;
 	do
 		# page submitted
@@ -97,7 +96,7 @@ esac
 			pbmtojbg -p 72 -o 3 -m 0 -q < $tmpdir/$page > $tmpdir/raster.jbig
 
 			# Taking image size
-			jsize=`wc -c < $tmpdir/raster.jbig`
+			jsize=`wc --bytes < $tmpdir/raster.jbig`
 
 			# Flushing page header
 			printf '@PJL SET PAGESTATUS=START\r\n'
@@ -114,12 +113,13 @@ esac
 			# Flushing image
 			cat $tmpdir/raster.jbig
 
-			# Flushing page footer
+			# compute intensive, can be disabled
 			dotcount=$(convert $tmpdir/raster.jbig \
 				-define histogram:unique-colors=true -format %c histogram:info:- |
 				awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
-
 			printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
+
+			# Flushing page footer
 			printf '@PJL SET PAGESTATUS=END\r\n'
 		}
 	done
