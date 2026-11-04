@@ -18,6 +18,11 @@
 #  *cupsFilter: "application/vnd.cups-postscript 100 pstoestudio"
 #
 
+# Configuration
+# -------------
+DISABLE_DOTCOUNT=0  # disable compute intensive dot counting
+# -------------
+
 function trapINT() {
 	[ "x$trp" = "x" ] &&  trp="yes" || return
 	sleep 3
@@ -113,11 +118,12 @@ esac
 			# Flushing image
 			cat $tmpdir/raster.jbig
 
-			# compute intensive, can be disabled
-			dotcount=$(convert $tmpdir/raster.jbig \
-				-define histogram:unique-colors=true -format %c histogram:info:- |
-				awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
-			printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
+			if [ $DISABLE_DOTCOUNT -ne 0 ]; then
+				dotcount=$(convert $tmpdir/raster.jbig \
+					-define histogram:unique-colors=true -format %c histogram:info:- |
+					awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
+				printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
+			fi
 
 			# Flushing page footer
 			printf '@PJL SET PAGESTATUS=END\r\n'
