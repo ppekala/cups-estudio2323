@@ -40,7 +40,11 @@ trap "stop; trapINT" SIGINT SIGTERM SIGQUIT
 ddate="`LC_ALL=en_US.UTF-8 date '+%Y/%m/%d %H:%M:%S'`"
 
 # Temporary directory
-tmpdir=`mktemp --directory -t pstoestudio-XXXXXX` || exit 1
+tmpdir=`mktemp --directory -t pstoestudio-XXXXXX`
+if [ $? -ne 0 ]; then
+	echo "ERROR: Creation of temporary directory failed." >&2
+	exit 1
+fi
 echo $* > $tmpdir/cmdline
 
 # Printing defaults
@@ -62,6 +66,9 @@ case $paper in
 	"A4")
 		paperwidth=4961
 		paperlength=7016 ;;
+	*)
+		printf "ERROR: Paper size '%s' is unsupported.\n" "$paper" >&2
+		exit 1
 esac
 
 (
