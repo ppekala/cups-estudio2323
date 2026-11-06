@@ -20,11 +20,13 @@
 
 # Configuration
 # -------------
+# shellcheck disable=SC2181
+# shellcheck disable=SC2317
 DISABLE_DOTCOUNT=0  # disable compute intensive dot counting
 # -------------
 
 function trapINT() {
-	[ "x$trp" = "x" ] &&  trp="yes" || return
+	[ -z "$trp" ] && trp="yes" || return
 	sleep 3
 	rm -rf "$tmpdir"
 	echo "ERROR: Terminated before completing conversion." >&2
@@ -46,7 +48,7 @@ if [ $? -ne 0 ]; then
 	echo "ERROR: Creation of temporary directory failed." >&2
 	exit 1
 fi
-echo $* > "$tmpdir/cmdline"
+echo "$*" > "$tmpdir/cmdline"
 
 # Printing defaults
 paper="A4"
@@ -122,13 +124,13 @@ error=0
 			printf '@PJL SET PAGESTATUS=START\r\n'
 			printf '@PJL SET COPIES=1\r\n'
 			printf '@PJL SET DUPLEX=OFF\r\n'
-			printf '@PJL SET PAPER=%s\r\n' $paper
-			printf '@PJL SET PAPERWIDTH=%d\r\n' $paperwidth
-			printf '@PJL SET PAPERLENGTH=%d\r\n' $paperlength
+			printf '@PJL SET PAPER=%s\r\n' "$paper"
+			printf '@PJL SET PAPERWIDTH=%d\r\n' "$paperwidth"
+			printf '@PJL SET PAPERLENGTH=%d\r\n' "$paperlength"
 			printf '@PJL SET RESOLUTION=600\r\n'
 			# CUPS does portrait/landscape conversion before sending output to filter
 			printf '@PJL SET ORIENTATION=PORTRAIT\r\n'
-			printf '@PJL SET IMAGELEN=%d\r\n' $jsize
+			printf '@PJL SET IMAGELEN=%d\r\n' "$jsize"
 
 			# Flushing image
 			cat "$tmpdir/raster.jbig"
@@ -137,7 +139,7 @@ error=0
 				dotcount=$(convert "$tmpdir/raster.jbig" \
 					-define histogram:unique-colors=true -format %c histogram:info:- |
 					awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
-				[ $? -eq 0 -a -n "$dotcount" ] && printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
+				[ -n "$dotcount" ] && printf '@PJL SET DOTCOUNT=%d\r\n' "$dotcount"
 			fi
 
 			# Flushing page footer
