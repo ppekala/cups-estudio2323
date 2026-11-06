@@ -27,7 +27,8 @@ function trapINT() {
 	[ "x$trp" = "x" ] &&  trp="yes" || return
 	sleep 3
 	rm -rf $tmpdir
-	exit
+	echo "ERROR: Terminated before completing conversion." >&2
+	exit 1
 }
 
 function stop() {
@@ -71,6 +72,8 @@ case $paper in
 		exit 1
 esac
 
+error=0
+
 (
 	stage="empty"
 	inotifywait --quiet --monitor --recursive --event close_write --format '%f' $tmpdir |
@@ -100,12 +103,17 @@ esac
 			printf '\033%%-12345\r\n'
 
 			# Kill inotifywait
-			pkill -f $tmpdir
+			pkill --full $tmpdir
 			break
 		}
 		[ "$stage" = "printing" ] && {
 			# Converting page to JBIG format (parameters are very special for this printer!)
 			pbmtojbg -p 72 -o 3 -m 0 -q < $tmpdir/$page > $tmpdir/raster.jbig
+			if [ $? -ne 0 ]; then
+				echo "ERROR: Conversion to JBIG format failed." >&2
+				pkill --full $tmpdir
+				exit 1
+			fi
 
 			# Taking image size
 			jsize=`wc --bytes < $tmpdir/raster.jbig`
@@ -129,7 +137,7 @@ esac
 				dotcount=$(convert $tmpdir/raster.jbig \
 					-define histogram:unique-colors=true -format %c histogram:info:- |
 					awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
-				printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
+				[ $? -eq 0 -a -n "$dotcount" ] && printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
 			fi
 
 			# Flushing page footer
@@ -141,8 +149,14 @@ esac
 # Converting from PostScript to PBM image format (per page)
 gs -sDEVICE=pbmraw -sOutputFile=${tmpdir}/%d-page.pbm -r600 \
 	-g${paperwidth}x${paperlength} -dFIXEDMEDIA -dQUIET -dBATCH -dNOPAUSE -
+if [ $? -ne 0 ]; then
+	echo "ERROR: PostScript to PBM format conversion failed."
+	error=1
+fi
 
 stop
 wait
+[ $? -ne 0 ] && error=1
 
-trapINT
+rm -rf $tmpdir
+exit $error
