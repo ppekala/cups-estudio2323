@@ -26,13 +26,13 @@ DISABLE_DOTCOUNT=0  # disable compute intensive dot counting
 function trapINT() {
 	[ "x$trp" = "x" ] &&  trp="yes" || return
 	sleep 3
-	rm -rf $tmpdir
+	rm -rf "$tmpdir"
 	echo "ERROR: Terminated before completing conversion." >&2
 	exit 1
 }
 
 function stop() {
-	echo "stop" > $tmpdir/999999999-page.pbm
+	echo "stop" > "$tmpdir/999999999-page.pbm"
 }
 
 trap "stop; trapINT" SIGINT SIGTERM SIGQUIT
@@ -46,7 +46,7 @@ if [ $? -ne 0 ]; then
 	echo "ERROR: Creation of temporary directory failed." >&2
 	exit 1
 fi
-echo $* > $tmpdir/cmdline
+echo $* > "$tmpdir/cmdline"
 
 # Printing defaults
 paper="A4"
@@ -76,7 +76,7 @@ error=0
 
 (
 	stage="empty"
-	inotifywait --quiet --monitor --recursive --event close_write --format '%f' $tmpdir |
+	inotifywait --quiet --monitor --recursive --event close_write --format '%f' "$tmpdir" |
 		grep --line-buffered 'page.pbm$' | while read page;
 	do
 		# page submitted
@@ -103,20 +103,20 @@ error=0
 			printf '\033%%-12345\r\n'
 
 			# Kill inotifywait
-			pkill --full $tmpdir
+			pkill --full "$tmpdir"
 			break
 		}
 		[ "$stage" = "printing" ] && {
 			# Converting page to JBIG format (parameters are very special for this printer!)
-			pbmtojbg -p 72 -o 3 -m 0 -q < $tmpdir/$page > $tmpdir/raster.jbig
+			pbmtojbg -p 72 -o 3 -m 0 -q < "$tmpdir/$page" > "$tmpdir/raster.jbig"
 			if [ $? -ne 0 ]; then
 				echo "ERROR: Conversion to JBIG format failed." >&2
-				pkill --full $tmpdir
+				pkill --full "$tmpdir"
 				exit 1
 			fi
 
 			# Taking image size
-			jsize=`wc --bytes < $tmpdir/raster.jbig`
+			jsize=`wc --bytes < "$tmpdir/raster.jbig"`
 
 			# Flushing page header
 			printf '@PJL SET PAGESTATUS=START\r\n'
@@ -131,10 +131,10 @@ error=0
 			printf '@PJL SET IMAGELEN=%d\r\n' $jsize
 
 			# Flushing image
-			cat $tmpdir/raster.jbig
+			cat "$tmpdir/raster.jbig"
 
 			if [ $DISABLE_DOTCOUNT -eq 0 ]; then
-				dotcount=$(convert $tmpdir/raster.jbig \
+				dotcount=$(convert "$tmpdir/raster.jbig" \
 					-define histogram:unique-colors=true -format %c histogram:info:- |
 					awk -F: '/black/ { gsub(" ", "", $1); print $1; }')
 				[ $? -eq 0 -a -n "$dotcount" ] && printf '@PJL SET DOTCOUNT=%d\r\n' $dotcount
@@ -147,7 +147,7 @@ error=0
 ) &
 
 # Converting from PostScript to PBM image format (per page)
-gs -sDEVICE=pbmraw -sOutputFile=${tmpdir}/%d-page.pbm -r600 \
+gs -sDEVICE=pbmraw -sOutputFile="$tmpdir/%d-page.pbm" -r600 \
 	-g${paperwidth}x${paperlength} -dFIXEDMEDIA -dQUIET -dBATCH -dNOPAUSE -
 if [ $? -ne 0 ]; then
 	echo "ERROR: PostScript to PBM format conversion failed." >&2
@@ -158,5 +158,5 @@ stop
 wait
 [ $? -ne 0 ] && error=1
 
-rm -rf $tmpdir
+rm -rf "$tmpdir"
 exit $error
