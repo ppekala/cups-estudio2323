@@ -38,10 +38,10 @@ function stop() {
 trap "stop; trapINT" SIGINT SIGTERM SIGQUIT
 
 # Printing date
-ddate="`LC_ALL=en_US.UTF-8 date '+%Y/%m/%d %H:%M:%S'`"
+ddate=$(LC_ALL=en_US.UTF-8 date '+%Y/%m/%d %H:%M:%S')
 
 # Temporary directory
-tmpdir=`mktemp --directory -t pstoestudio-XXXXXX`
+tmpdir=$(mktemp --directory -t pstoestudio-XXXXXX)
 if [ $? -ne 0 ]; then
 	echo "ERROR: Creation of temporary directory failed." >&2
 	exit 1
@@ -116,7 +116,7 @@ error=0
 			fi
 
 			# Taking image size
-			jsize=`wc --bytes < "$tmpdir/raster.jbig"`
+			jsize=$(wc --bytes < "$tmpdir/raster.jbig")
 
 			# Flushing page header
 			printf '@PJL SET PAGESTATUS=START\r\n'
