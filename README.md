@@ -6,7 +6,14 @@ performance issues disable dotcounting feature
 (see pstoestudio for details).
 
 To install run as root:
-`make install`
+
+```bash
+make install
+```
 
 To remove from your system run as a root:
-`make uninstall`
+
+```bash
+make uninstall
+```
+
